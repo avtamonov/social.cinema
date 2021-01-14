@@ -4,5 +4,5 @@ import java.util.*
 
 data class ReserveRequest (
     val idCinemaSession: UUID,
-    val placesToReserve: List<Int>
+    val places: List<Int>
 )

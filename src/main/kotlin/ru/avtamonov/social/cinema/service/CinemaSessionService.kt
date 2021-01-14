@@ -19,5 +19,7 @@ interface CinemaSessionService {
 
     fun deleteCinemaSession(id: UUID)
 
-    fun reserveTicketOnSession(reserveRequest: ReserveRequest): CinemaSessionResponse
+    fun reservePlacesOnSession(reserveRequest: ReserveRequest): CinemaSessionResponse
+
+    fun unReservePlacesOnSession(reserveRequest: ReserveRequest): CinemaSessionResponse
 }
