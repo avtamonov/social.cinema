@@ -41,17 +41,20 @@ class CinemaSessionController (
     @PostMapping("/reserve")
     @ApiOperation("Забронитовать места на сеансе", response = CinemaSessionResponse::class)
     fun reserveSeatsOnCinemaSession(
-        @ApiParam("Места для бронирования") @RequestBody request: ReserveRequest
+        @ApiParam("Места для бронирования") @RequestBody request: ReserveRequest,
+        @ApiParam("Логин") @RequestParam login: String,
+        @ApiParam("Категория клиента", allowableValues = "1, 2, 3, 4") @RequestParam clientCategory: Int
     ): CinemaSessionResponse {
-        return cinemaSessionService.reservePlacesOnSession(request)
+        return cinemaSessionService.reservePlacesOnSession(request, login, clientCategory)
     }
 
     @PutMapping("/reserve")
-    @ApiOperation("Забронитовать места на сеансе", response = CinemaSessionResponse::class)
+    @ApiOperation("Отменить бронирование мест на сеансе", response = CinemaSessionResponse::class)
     fun unReserveSeatsOnCinemaSession(
-        @ApiParam("Места для отмены бронирования") @RequestBody request: ReserveRequest
+        @ApiParam("Места для отмены бронирования") @RequestBody request: ReserveRequest,
+        @ApiParam("Логин") @RequestParam login: String
     ): CinemaSessionResponse {
-        return cinemaSessionService.unReservePlacesOnSession(request)
+        return cinemaSessionService.unReservePlacesOnSession(request, login)
     }
 
     @DeleteMapping("/{id}")

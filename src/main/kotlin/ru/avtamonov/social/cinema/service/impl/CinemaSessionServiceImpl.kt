@@ -42,10 +42,10 @@ class CinemaSessionServiceImpl : CinemaSessionService {
         cinemaSessions.remove(id)
     }
 
-    override fun reservePlacesOnSession(reserveRequest: ReserveRequest): CinemaSessionResponse {
+    override fun reservePlacesOnSession(reserveRequest: ReserveRequest, login: String, category: Int): CinemaSessionResponse {
         val session = cinemaSessions[reserveRequest.idCinemaSession]
         return if (session != null) {
-            val placesWithStatus = reservePlaces(session.freePlaces, session.reservedPlaces, reserveRequest.places)
+            val placesWithStatus = reservePlaces(session.freePlaces, session.reservedPlaces, reserveRequest.places, login)
             if (placesWithStatus.status != Status.ERROR) {
                 val updatedSession = session.copy(freePlaces = placesWithStatus.freePlaces, reservedPlaces = placesWithStatus.reservedPlaces)
                 cinemaSessions[session.id] = updatedSession
@@ -61,16 +61,16 @@ class CinemaSessionServiceImpl : CinemaSessionService {
         }
     }
 
-    override fun unReservePlacesOnSession(unReserveRequest: ReserveRequest): CinemaSessionResponse {
+    override fun unReservePlacesOnSession(unReserveRequest: ReserveRequest, login: String): CinemaSessionResponse {
         val session = cinemaSessions[unReserveRequest.idCinemaSession]
         return if (session != null) {
-            val placesWithStatus = unReservePlaces(session.freePlaces, session.reservedPlaces,  unReserveRequest.places)
+            val placesWithStatus = unReservePlaces(session.freePlaces, session.reservedPlaces,  unReserveRequest.places, login)
             if (placesWithStatus.status != Status.ERROR) {
                 val updatedSession = session.copy(freePlaces = placesWithStatus.freePlaces, reservedPlaces = placesWithStatus.reservedPlaces)
                 cinemaSessions[session.id] = updatedSession
                 CinemaSessionMapper.toResponse(updatedSession)
             } else {
-                throw ValidationException("Вы пытались забронировать уже занятые места")
+                throw ValidationException("Вы пытались отменить чужую бронь или свободные места")
             }
 
         } else {
@@ -78,13 +78,13 @@ class CinemaSessionServiceImpl : CinemaSessionService {
         }
     }
 
-    private fun reservePlaces(freePlaces: List<Int>, reservedPlaces: List<Int>, placesToReserve: List<Int>): SessionPlacesWithReserveStatus {
+    private fun reservePlaces(freePlaces: List<Int>, reservedPlaces: Map<Int, String>, placesToReserve: List<Int>, login: String): SessionPlacesWithReserveStatus {
         val newFreePlaces = freePlaces.toMutableList()
-        val newReservedPlaces = reservedPlaces.toMutableList()
+        val newReservedPlaces = reservedPlaces.toMutableMap()
         var isReserveSuccess = true
         placesToReserve.forEach {
             if (newFreePlaces.contains(it)) {
-                newReservedPlaces.add(it)
+                newReservedPlaces[it] = login
             } else {
                 isReserveSuccess = false
             }
@@ -92,28 +92,29 @@ class CinemaSessionServiceImpl : CinemaSessionService {
         return if (isReserveSuccess) {
             newFreePlaces.removeIf { it in placesToReserve }
             newFreePlaces.sort()
-            newReservedPlaces.sort()
+            newReservedPlaces.toSortedMap()
             SessionPlacesWithReserveStatus(newFreePlaces, newReservedPlaces, Status.OK)
         } else {
             SessionPlacesWithReserveStatus(freePlaces, reservedPlaces, Status.ERROR)
         }
     }
 
-    private fun unReservePlaces(freePlaces: List<Int>, reservedPlaces: List<Int>, placesToUnReserve: List<Int>): SessionPlacesWithReserveStatus {
+    private fun unReservePlaces(freePlaces: List<Int>, reservedPlaces: Map<Int, String>, placesToUnReserve: List<Int>, login: String): SessionPlacesWithReserveStatus {
         val newFreePlaces = freePlaces.toMutableList()
-        val newReservedPlaces = reservedPlaces.toMutableList()
+        val newReservedPlaces = reservedPlaces.toMutableMap()
         var isUnReserveSuccess = true
         placesToUnReserve.forEach {
-            if (newReservedPlaces.contains(it)) {
+            val reservedPlaceLogin = newReservedPlaces[it]
+            if (reservedPlaceLogin != null && reservedPlaceLogin == login) {
                 newFreePlaces.add(it)
+                newReservedPlaces.remove(it)
             } else {
                 isUnReserveSuccess = false
             }
         }
         return if (isUnReserveSuccess) {
-            newReservedPlaces.removeIf { it in placesToUnReserve }
             newFreePlaces.sort()
-            newReservedPlaces.sort()
+            newReservedPlaces.toSortedMap()
             SessionPlacesWithReserveStatus(newFreePlaces, newReservedPlaces, Status.OK)
         } else {
             SessionPlacesWithReserveStatus(freePlaces, reservedPlaces, Status.ERROR)

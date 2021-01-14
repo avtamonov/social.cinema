@@ -2,6 +2,7 @@ package ru.avtamonov.social.cinema.mapper
 
 import ru.avtamonov.social.cinema.dto.CinemaSessionCreateDto
 import ru.avtamonov.social.cinema.dto.CinemaSessionResponse
+import ru.avtamonov.social.cinema.dto.ReservedPlaces
 import ru.avtamonov.social.cinema.model.CinemaSession
 
 class CinemaSessionMapper {
@@ -11,7 +12,7 @@ class CinemaSessionMapper {
                 countOfPlaces = cinemaSessionDto.countOfPlaces,
                 filmName = cinemaSessionDto.filmName,
                 freePlaces = (1..cinemaSessionDto.countOfPlaces).toList(),
-                reservedPlaces = listOf(),
+                reservedPlaces = mapOf(),
                 startSessionDate = cinemaSessionDto.startSessionDate
             )
         }
@@ -22,7 +23,7 @@ class CinemaSessionMapper {
                 countOfPlaces = cinemaSession.countOfPlaces,
                 filmName = cinemaSession.filmName,
                 freePlaces = cinemaSession.freePlaces,
-                reservedPlaces = cinemaSession.reservedPlaces,
+                reservedPlaces = cinemaSession.reservedPlaces.map { ReservedPlaces(it.key, it.value) },
                 startSessionDate = cinemaSession.startSessionDate
             )
         }
