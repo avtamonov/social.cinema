@@ -1,5 +1,6 @@
 package ru.avtamonov.social.cinema.service.impl
 
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import ru.avtamonov.social.cinema.dto.*
 import ru.avtamonov.social.cinema.enum.Status
@@ -13,23 +14,24 @@ import java.util.*
 @Service
 class CinemaSessionServiceImpl : CinemaSessionService {
 
-    private val cinemaSessionList = mutableListOf<CinemaSession>()
+    private val cinemaSessions = mutableMapOf<UUID, CinemaSession>()
+
+    private val logger = LoggerFactory.getLogger(this::class.java)
 
     override fun createCinemaSession(newSession: CinemaSessionCreateDto): CinemaSessionResponse {
         val cinemaSession = CinemaSessionMapper.toModel(newSession)
-        cinemaSessionList.add(cinemaSession)
+        cinemaSessions[cinemaSession.id] = cinemaSession
         return CinemaSessionMapper.toResponse(cinemaSession)
     }
 
     override fun getCinemaSessions(): List<CinemaSessionResponse> {
-        return cinemaSessionList.map { CinemaSessionMapper.toResponse(it) }
+        return cinemaSessions.map { CinemaSessionMapper.toResponse(it.value) }
     }
 
     override fun transferSessionTime(transferRequest: TransferRequest): Status {
-        val sessionIndex = cinemaSessionList.indexOfFirst { it.id == transferRequest.idCinemaSession }
-        return if (sessionIndex != -1) {
-            val session = cinemaSessionList.removeAt(sessionIndex)
-            cinemaSessionList.add(session.copy(startSessionDate = transferRequest.transferTime))
+        val session = cinemaSessions[transferRequest.idCinemaSession]
+        return if (session != null) {
+            cinemaSessions[session.id] = session.copy(startSessionDate = transferRequest.transferTime)
             Status.OK
         } else {
             Status.ERROR
@@ -37,21 +39,20 @@ class CinemaSessionServiceImpl : CinemaSessionService {
     }
 
     override fun deleteCinemaSession(id: UUID) {
-        val sessionIndex = cinemaSessionList.indexOfFirst { it.id == id }
-        cinemaSessionList.removeAt(sessionIndex)
+        cinemaSessions.remove(id)
     }
 
     override fun reservePlacesOnSession(reserveRequest: ReserveRequest): CinemaSessionResponse {
-        val sessionIndex = cinemaSessionList.indexOfFirst { it.id == reserveRequest.idCinemaSession }
-        return if (sessionIndex != -1) {
-            val session = cinemaSessionList.removeAt(sessionIndex)
+        val session = cinemaSessions[reserveRequest.idCinemaSession]
+        return if (session != null) {
             val placesWithStatus = reservePlaces(session.freePlaces, session.reservedPlaces, reserveRequest.places)
             if (placesWithStatus.status != Status.ERROR) {
                 val updatedSession = session.copy(freePlaces = placesWithStatus.freePlaces, reservedPlaces = placesWithStatus.reservedPlaces)
-                cinemaSessionList.add(sessionIndex, updatedSession)
+                cinemaSessions[session.id] = updatedSession
+                logger.info("Успешная бронь")
                 CinemaSessionMapper.toResponse(updatedSession)
             } else {
-                cinemaSessionList.add(sessionIndex, session)
+                logger.error("Вы пытались забронировать уже занятые места")
                 throw ValidationException("Вы пытались забронировать уже занятые места")
             }
 
@@ -60,22 +61,20 @@ class CinemaSessionServiceImpl : CinemaSessionService {
         }
     }
 
-    override fun unReservePlacesOnSession(reserveRequest: ReserveRequest): CinemaSessionResponse {
-        val sessionIndex = cinemaSessionList.indexOfFirst { it.id == reserveRequest.idCinemaSession }
-        return if (sessionIndex != -1) {
-            val session = cinemaSessionList.removeAt(sessionIndex)
-            val placesWithStatus = unReservePlaces(session.freePlaces, session.reservedPlaces,  reserveRequest.places)
+    override fun unReservePlacesOnSession(unReserveRequest: ReserveRequest): CinemaSessionResponse {
+        val session = cinemaSessions[unReserveRequest.idCinemaSession]
+        return if (session != null) {
+            val placesWithStatus = unReservePlaces(session.freePlaces, session.reservedPlaces,  unReserveRequest.places)
             if (placesWithStatus.status != Status.ERROR) {
                 val updatedSession = session.copy(freePlaces = placesWithStatus.freePlaces, reservedPlaces = placesWithStatus.reservedPlaces)
-                cinemaSessionList.add(sessionIndex, updatedSession)
+                cinemaSessions[session.id] = updatedSession
                 CinemaSessionMapper.toResponse(updatedSession)
             } else {
-                cinemaSessionList.add(sessionIndex, session)
                 throw ValidationException("Вы пытались забронировать уже занятые места")
             }
 
         } else {
-            throw ResourceNotFoundException("Сеанс с id:${reserveRequest.idCinemaSession} не найден")
+            throw ResourceNotFoundException("Сеанс с id:${unReserveRequest.idCinemaSession} не найден")
         }
     }
 
@@ -120,4 +119,5 @@ class CinemaSessionServiceImpl : CinemaSessionService {
             SessionPlacesWithReserveStatus(freePlaces, reservedPlaces, Status.ERROR)
         }
     }
+
 }
