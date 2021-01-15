@@ -5,5 +5,6 @@ import java.time.LocalDateTime
 data class CinemaSessionCreateDto (
     val filmName: String = "test",
     val countOfPlaces: Int,
-    val startSessionDate: LocalDateTime
+    val startSessionDate: LocalDateTime,
+    val standardPrice: Double = 100.0
 )

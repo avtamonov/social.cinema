@@ -1,9 +1,6 @@
 package ru.avtamonov.social.cinema.service
 
-import ru.avtamonov.social.cinema.dto.CinemaSessionCreateDto
-import ru.avtamonov.social.cinema.dto.CinemaSessionResponse
-import ru.avtamonov.social.cinema.dto.ReserveRequest
-import ru.avtamonov.social.cinema.dto.TransferRequest
+import ru.avtamonov.social.cinema.dto.*
 import ru.avtamonov.social.cinema.enum.Status
 import java.util.*
 
@@ -22,4 +19,6 @@ interface CinemaSessionService {
     fun reservePlacesOnSession(reserveRequest: ReserveRequest, login: String, category: Int): CinemaSessionResponse
 
     fun unReservePlacesOnSession(unReserveRequest: ReserveRequest, login: String): CinemaSessionResponse
+
+    fun getSessionHistoryByLogin(login: String): List<SessionHistoryResponse>
 }

@@ -8,6 +8,13 @@ data class CinemaSession(
     val countOfPlaces: Int,
     val filmName: String,
     val freePlaces: List<Int>,
-    val reservedPlaces: Map<Int, String>,
-    val startSessionDate: LocalDateTime
+    val reservedPlaces: Map<Int, Place>,
+    val startSessionDate: LocalDateTime,
+    val totalIncome: Double,
+    val standardPrice: Double
+)
+
+data class Place (
+    val login: String,
+    val price: Double
 )

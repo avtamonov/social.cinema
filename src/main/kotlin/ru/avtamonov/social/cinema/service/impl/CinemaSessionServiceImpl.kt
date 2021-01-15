@@ -1,6 +1,7 @@
 package ru.avtamonov.social.cinema.service.impl
 
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import ru.avtamonov.social.cinema.dto.*
 import ru.avtamonov.social.cinema.enum.Status
@@ -8,15 +9,34 @@ import ru.avtamonov.social.cinema.exceptionhandling.customexceptions.ResourceNot
 import ru.avtamonov.social.cinema.exceptionhandling.customexceptions.ValidationException
 import ru.avtamonov.social.cinema.mapper.CinemaSessionMapper
 import ru.avtamonov.social.cinema.model.CinemaSession
+import ru.avtamonov.social.cinema.model.Place
 import ru.avtamonov.social.cinema.service.CinemaSessionService
 import java.util.*
+import javax.annotation.PostConstruct
+import kotlin.math.log
 
 @Service
 class CinemaSessionServiceImpl : CinemaSessionService {
 
+    @Value("\${social-discount-1}")
+    private var discount1 = 0
+    @Value("\${social-discount-2}")
+    private var discount2 = 0
+    @Value("\${social-discount-3}")
+    private var discount3 = 0
+
     private val cinemaSessions = mutableMapOf<UUID, CinemaSession>()
 
     private val logger = LoggerFactory.getLogger(this::class.java)
+
+    @PostConstruct
+    private fun validateDiscounts() {
+        when {
+            discount1 > 100 || discount1 < 0 -> throw ValidationException("Скидка для категории 1 меньше 0 или больше 100")
+            discount2 > 100 || discount2 < 0 -> throw ValidationException("Скидка для категории 2 меньше 0 или больше 100")
+            discount3 > 100 || discount3 < 0 -> throw ValidationException("Скидка для категории 3 меньше 0 или больше 100")
+        }
+    }
 
     override fun createCinemaSession(newSession: CinemaSessionCreateDto): CinemaSessionResponse {
         val cinemaSession = CinemaSessionMapper.toModel(newSession)
@@ -45,9 +65,9 @@ class CinemaSessionServiceImpl : CinemaSessionService {
     override fun reservePlacesOnSession(reserveRequest: ReserveRequest, login: String, category: Int): CinemaSessionResponse {
         val session = cinemaSessions[reserveRequest.idCinemaSession]
         return if (session != null) {
-            val placesWithStatus = reservePlaces(session.freePlaces, session.reservedPlaces, reserveRequest.places, login)
+            val placesWithStatus = reservePlaces(session, reserveRequest.places, login, category)
             if (placesWithStatus.status != Status.ERROR) {
-                val updatedSession = session.copy(freePlaces = placesWithStatus.freePlaces, reservedPlaces = placesWithStatus.reservedPlaces)
+                val updatedSession = session.copy(freePlaces = placesWithStatus.freePlaces, reservedPlaces = placesWithStatus.reservedPlaces, totalIncome = placesWithStatus.income)
                 cinemaSessions[session.id] = updatedSession
                 logger.info("Успешная бронь")
                 CinemaSessionMapper.toResponse(updatedSession)
@@ -55,7 +75,6 @@ class CinemaSessionServiceImpl : CinemaSessionService {
                 logger.error("Вы пытались забронировать уже занятые места")
                 throw ValidationException("Вы пытались забронировать уже занятые места")
             }
-
         } else {
             throw ResourceNotFoundException("Сеанс с id:${reserveRequest.idCinemaSession} не найден")
         }
@@ -64,27 +83,41 @@ class CinemaSessionServiceImpl : CinemaSessionService {
     override fun unReservePlacesOnSession(unReserveRequest: ReserveRequest, login: String): CinemaSessionResponse {
         val session = cinemaSessions[unReserveRequest.idCinemaSession]
         return if (session != null) {
-            val placesWithStatus = unReservePlaces(session.freePlaces, session.reservedPlaces,  unReserveRequest.places, login)
+            val placesWithStatus = unReservePlaces(session, unReserveRequest.places, login)
             if (placesWithStatus.status != Status.ERROR) {
-                val updatedSession = session.copy(freePlaces = placesWithStatus.freePlaces, reservedPlaces = placesWithStatus.reservedPlaces)
+                val updatedSession = session.copy(freePlaces = placesWithStatus.freePlaces, reservedPlaces = placesWithStatus.reservedPlaces, totalIncome = placesWithStatus.income)
                 cinemaSessions[session.id] = updatedSession
                 CinemaSessionMapper.toResponse(updatedSession)
             } else {
                 throw ValidationException("Вы пытались отменить чужую бронь или свободные места")
             }
-
         } else {
             throw ResourceNotFoundException("Сеанс с id:${unReserveRequest.idCinemaSession} не найден")
         }
     }
 
-    private fun reservePlaces(freePlaces: List<Int>, reservedPlaces: Map<Int, String>, placesToReserve: List<Int>, login: String): SessionPlacesWithReserveStatus {
-        val newFreePlaces = freePlaces.toMutableList()
-        val newReservedPlaces = reservedPlaces.toMutableMap()
+    //FIXME Проблемы с оптимизацией
+    override fun getSessionHistoryByLogin(login: String): List<SessionHistoryResponse> {
+        return cinemaSessions
+            .filterValues { it.reservedPlaces.filterValues { v -> v.login == login }.isNotEmpty() }.values.toList()
+            .map { CinemaSessionMapper.toHistoryResponse(it) }
+    }
+
+    private fun reservePlaces(
+        session: CinemaSession,
+        placesToReserve: List<Int>,
+        login: String,
+        category: Int
+    ): SessionPlacesWithReserveStatus {
+        val newFreePlaces = session.freePlaces.toMutableList()
+        val newReservedPlaces = session.reservedPlaces.toMutableMap()
         var isReserveSuccess = true
+        var totalIncome = session.totalIncome
         placesToReserve.forEach {
             if (newFreePlaces.contains(it)) {
-                newReservedPlaces[it] = login
+                val income = calculateIncome(category, session.standardPrice)
+                newReservedPlaces[it] = Place(login, income)
+                totalIncome += income
             } else {
                 isReserveSuccess = false
             }
@@ -93,21 +126,27 @@ class CinemaSessionServiceImpl : CinemaSessionService {
             newFreePlaces.removeIf { it in placesToReserve }
             newFreePlaces.sort()
             newReservedPlaces.toSortedMap()
-            SessionPlacesWithReserveStatus(newFreePlaces, newReservedPlaces, Status.OK)
+            SessionPlacesWithReserveStatus(newFreePlaces, newReservedPlaces, Status.OK, totalIncome)
         } else {
-            SessionPlacesWithReserveStatus(freePlaces, reservedPlaces, Status.ERROR)
+            SessionPlacesWithReserveStatus(session.freePlaces, session.reservedPlaces, Status.ERROR, session.totalIncome)
         }
     }
 
-    private fun unReservePlaces(freePlaces: List<Int>, reservedPlaces: Map<Int, String>, placesToUnReserve: List<Int>, login: String): SessionPlacesWithReserveStatus {
-        val newFreePlaces = freePlaces.toMutableList()
-        val newReservedPlaces = reservedPlaces.toMutableMap()
+    private fun unReservePlaces(
+        session: CinemaSession,
+        placesToUnReserve: List<Int>,
+        login: String
+    ): SessionPlacesWithReserveStatus {
+        val newFreePlaces = session.freePlaces.toMutableList()
+        val newReservedPlaces = session.reservedPlaces.toMutableMap()
         var isUnReserveSuccess = true
+        var totalIncome = session.totalIncome
         placesToUnReserve.forEach {
-            val reservedPlaceLogin = newReservedPlaces[it]
-            if (reservedPlaceLogin != null && reservedPlaceLogin == login) {
+            val reservedPlaceInfo = newReservedPlaces[it]
+            if (reservedPlaceInfo != null && reservedPlaceInfo.login == login) {
                 newFreePlaces.add(it)
                 newReservedPlaces.remove(it)
+                totalIncome -= reservedPlaceInfo.price
             } else {
                 isUnReserveSuccess = false
             }
@@ -115,9 +154,19 @@ class CinemaSessionServiceImpl : CinemaSessionService {
         return if (isUnReserveSuccess) {
             newFreePlaces.sort()
             newReservedPlaces.toSortedMap()
-            SessionPlacesWithReserveStatus(newFreePlaces, newReservedPlaces, Status.OK)
+            SessionPlacesWithReserveStatus(newFreePlaces, newReservedPlaces, Status.OK, totalIncome)
         } else {
-            SessionPlacesWithReserveStatus(freePlaces, reservedPlaces, Status.ERROR)
+            SessionPlacesWithReserveStatus(session.freePlaces, session.reservedPlaces, Status.ERROR, session.totalIncome)
+        }
+    }
+
+    private fun calculateIncome(category: Int, price: Double): Double {
+        return when(category) {
+            0 -> price
+            1 -> price * (100 - discount1) / 100
+            2 -> price * (100 - discount2) / 100
+            3 -> price * (100 - discount3) / 100
+            else -> throw ValidationException("Не существует скидки для категории $category")
         }
     }
 
