@@ -11,7 +11,9 @@ data class CinemaSession(
     val reservedPlaces: Map<Int, Place>,
     val startSessionDate: LocalDateTime,
     val totalIncome: Double,
-    val standardPrice: Double
+    val standardPrice: Double,
+    val dateCreate: LocalDateTime,
+    val startReserveForStandardCategory: LocalDateTime
 )
 
 data class Place (

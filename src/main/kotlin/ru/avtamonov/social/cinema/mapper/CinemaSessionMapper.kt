@@ -5,10 +5,11 @@ import ru.avtamonov.social.cinema.dto.CinemaSessionResponse
 import ru.avtamonov.social.cinema.dto.ReservedPlaces
 import ru.avtamonov.social.cinema.dto.SessionHistoryResponse
 import ru.avtamonov.social.cinema.model.CinemaSession
+import java.time.LocalDateTime
 
 class CinemaSessionMapper {
     companion object {
-        fun toModel(cinemaSessionDto: CinemaSessionCreateDto): CinemaSession {
+        fun toModel(cinemaSessionDto: CinemaSessionCreateDto, now: LocalDateTime, delayTime: Long): CinemaSession {
             return CinemaSession(
                 countOfPlaces = cinemaSessionDto.countOfPlaces,
                 filmName = cinemaSessionDto.filmName,
@@ -16,7 +17,9 @@ class CinemaSessionMapper {
                 reservedPlaces = mapOf(),
                 startSessionDate = cinemaSessionDto.startSessionDate,
                 totalIncome = 0.0,
-                standardPrice = cinemaSessionDto.standardPrice
+                standardPrice = cinemaSessionDto.standardPrice,
+                dateCreate = now,
+                startReserveForStandardCategory = cinemaSessionDto.startSessionDate.minusMinutes(delayTime)
             )
         }
 
@@ -28,7 +31,9 @@ class CinemaSessionMapper {
                 freePlaces = cinemaSession.freePlaces,
                 reservedPlaces = cinemaSession.reservedPlaces.map { ReservedPlaces(it.key, it.value.login) },
                 startSessionDate = cinemaSession.startSessionDate,
-                totalIncome = cinemaSession.totalIncome
+                totalIncome = cinemaSession.totalIncome,
+                dateCreate = cinemaSession.dateCreate,
+                startReserveForStandardCategory = cinemaSession.startReserveForStandardCategory
             )
         }
 

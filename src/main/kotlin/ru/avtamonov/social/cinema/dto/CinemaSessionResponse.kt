@@ -10,7 +10,9 @@ data class CinemaSessionResponse(
     val freePlaces: List<Int>,
     val reservedPlaces: List<ReservedPlaces>,
     val startSessionDate: LocalDateTime,
-    val totalIncome: Double
+    val dateCreate: LocalDateTime,
+    val totalIncome: Double,
+    val startReserveForStandardCategory: LocalDateTime
 )
 
 data class ReservedPlaces (

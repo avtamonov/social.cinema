@@ -1,7 +1,6 @@
 package ru.avtamonov.social.cinema.service.impl
 
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import ru.avtamonov.social.cinema.dto.*
 import ru.avtamonov.social.cinema.enum.Status
@@ -11,35 +10,22 @@ import ru.avtamonov.social.cinema.mapper.CinemaSessionMapper
 import ru.avtamonov.social.cinema.model.CinemaSession
 import ru.avtamonov.social.cinema.model.Place
 import ru.avtamonov.social.cinema.service.CinemaSessionService
+import java.time.Clock
+import java.time.LocalDateTime
 import java.util.*
-import javax.annotation.PostConstruct
-import kotlin.math.log
 
 @Service
-class CinemaSessionServiceImpl : CinemaSessionService {
-
-    @Value("\${social-discount-1}")
-    private var discount1 = 0
-    @Value("\${social-discount-2}")
-    private var discount2 = 0
-    @Value("\${social-discount-3}")
-    private var discount3 = 0
+class CinemaSessionServiceImpl (
+    private val sessionOptions: SessionOptions,
+    private val clock: Clock
+) : CinemaSessionService {
 
     private val cinemaSessions = mutableMapOf<UUID, CinemaSession>()
 
     private val logger = LoggerFactory.getLogger(this::class.java)
 
-    @PostConstruct
-    private fun validateDiscounts() {
-        when {
-            discount1 > 100 || discount1 < 0 -> throw ValidationException("Скидка для категории 1 меньше 0 или больше 100")
-            discount2 > 100 || discount2 < 0 -> throw ValidationException("Скидка для категории 2 меньше 0 или больше 100")
-            discount3 > 100 || discount3 < 0 -> throw ValidationException("Скидка для категории 3 меньше 0 или больше 100")
-        }
-    }
-
     override fun createCinemaSession(newSession: CinemaSessionCreateDto): CinemaSessionResponse {
-        val cinemaSession = CinemaSessionMapper.toModel(newSession)
+        val cinemaSession = CinemaSessionMapper.toModel(newSession, LocalDateTime.now(clock), sessionOptions.delayTimeForStandardCategory)
         cinemaSessions[cinemaSession.id] = cinemaSession
         return CinemaSessionMapper.toResponse(cinemaSession)
     }
@@ -163,9 +149,9 @@ class CinemaSessionServiceImpl : CinemaSessionService {
     private fun calculateIncome(category: Int, price: Double): Double {
         return when(category) {
             0 -> price
-            1 -> price * (100 - discount1) / 100
-            2 -> price * (100 - discount2) / 100
-            3 -> price * (100 - discount3) / 100
+            1 -> price * (100 - sessionOptions.discount1) / 100
+            2 -> price * (100 - sessionOptions.discount2) / 100
+            3 -> price * (100 - sessionOptions.discount3) / 100
             else -> throw ValidationException("Не существует скидки для категории $category")
         }
     }
