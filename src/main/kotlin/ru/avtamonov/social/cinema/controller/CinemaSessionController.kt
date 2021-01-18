@@ -46,7 +46,7 @@ class CinemaSessionController (
     }
 
     @PostMapping("/discount-mode")
-    @ApiOperation("Вкл/выкл скидки", response = CinemaSessionResponse::class)
+    @ApiOperation("Вкл/выкл скидки", response = DiscountMode::class)
     fun workWithDiscountMode(
         @ApiParam("Скидки вкл", defaultValue = "true") @RequestParam discount: Boolean
     ): DiscountMode {
@@ -77,10 +77,18 @@ class CinemaSessionController (
     }
 
     @GetMapping("/history")
-    @ApiOperation("Прочитать историю посещений", response = CinemaSessionResponse::class)
+    @ApiOperation("Прочитать историю посещений", response = SessionHistoryResponse::class)
     fun getCinemaSessionHistory(
         @ApiParam("Логин") @RequestParam login: String
     ): List<SessionHistoryResponse> {
         return cinemaSessionService.getSessionHistoryByLogin(login)
+    }
+
+    @GetMapping("/reserved")
+    @ApiOperation("Просмотреть информацию о забронированных местах", response = SessionWithReservedPlaces::class)
+    fun getReservedInfo(
+        @ApiParam("Логин") @RequestParam login: String
+    ): List<SessionWithReservedPlaces> {
+        return cinemaSessionService.getReservedPlacesByLogin(login)
     }
 }

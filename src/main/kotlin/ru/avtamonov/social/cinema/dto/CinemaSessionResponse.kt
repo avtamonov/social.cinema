@@ -19,3 +19,9 @@ data class ReservedPlaces (
     val place: Int,
     val login: String
 )
+
+data class SessionWithReservedPlaces(
+    val id: UUID,
+    val filmName: String,
+    val reservedPlaces: List<ReservedPlaces>
+)

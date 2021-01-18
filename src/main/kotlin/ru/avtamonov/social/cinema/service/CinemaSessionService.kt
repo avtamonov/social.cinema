@@ -64,4 +64,6 @@ interface CinemaSessionService {
      * Метод включения и выключения скидок
      * */
     fun setDiscountMode(mode: Boolean): DiscountMode
+
+    fun getReservedPlacesByLogin(login: String): List<SessionWithReservedPlaces>
 }

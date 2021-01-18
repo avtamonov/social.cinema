@@ -120,4 +120,20 @@ class CinemaSessionServiceImpl (
         isDiscountOn = mode
         return DiscountMode(isDiscountOn)
     }
+
+    override fun getReservedPlacesByLogin(login: String): List<SessionWithReservedPlaces> {
+        val now = LocalDateTime.now(clock)
+        return cinemaSessions.asSequence()
+            .filter { it.value.startSessionDate.isAfter(now) && it.value.reservedPlaces.any { p -> p.value.login == login } }
+            .map {
+                SessionWithReservedPlaces(
+                    it.key,
+                    it.value.filmName,
+                    it.value.reservedPlaces.asSequence()
+                        .filter { p -> p.value.login == login }
+                        .map { p -> ReservedPlaces(p.key, p.value.login) }
+                        .toList()
+                )
+            }.toList()
+    }
 }
