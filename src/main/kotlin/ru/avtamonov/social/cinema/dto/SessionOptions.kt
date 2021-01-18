@@ -1,10 +1,10 @@
 package ru.avtamonov.social.cinema.dto
 
 data class SessionOptions(
-    val discount1: Int,
-    val discount2: Int,
-    val discount3: Int,
-    val delayTimeForStandardCategory: Long,
-    val minProfit: Int,
-    val paybackTime: Long
+    val discount1: Int = 10,
+    val discount2: Int = 15,
+    val discount3: Int = 20,
+    val delayTimeForStandardCategory: Long = 10,
+    val minProfit: Int = 50,
+    val paybackTime: Long = 20
 )

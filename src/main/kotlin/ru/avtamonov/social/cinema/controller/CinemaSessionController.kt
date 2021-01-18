@@ -45,6 +45,14 @@ class CinemaSessionController (
         return cinemaSessionService.reservePlacesOnSession(request, login, clientCategory)
     }
 
+    @PostMapping("/discount-mode")
+    @ApiOperation("Вкл/выкл скидки", response = CinemaSessionResponse::class)
+    fun workWithDiscountMode(
+        @ApiParam("Скидки вкл", defaultValue = "true") @RequestParam discount: Boolean
+    ): DiscountMode {
+        return cinemaSessionService.setDiscountMode(discount)
+    }
+
     @PutMapping("/reserve")
     @ApiOperation("Отменить бронирование мест на сеансе", response = CinemaSessionResponse::class)
     fun unReserveSeatsOnCinemaSession(

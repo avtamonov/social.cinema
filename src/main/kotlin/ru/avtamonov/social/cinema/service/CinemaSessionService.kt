@@ -59,4 +59,9 @@ interface CinemaSessionService {
      * Метод для проверки открытия продаж стандартной категории клиента
      * */
     fun checkTimeForStandardCategory()
+
+    /**
+     * Метод включения и выключения скидок
+     * */
+    fun setDiscountMode(mode: Boolean): DiscountMode
 }

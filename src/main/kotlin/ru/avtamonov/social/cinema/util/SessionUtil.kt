@@ -1,12 +1,15 @@
 package ru.avtamonov.social.cinema.util
 
+import ru.avtamonov.social.cinema.dto.CinemaSessionCreateDto
 import ru.avtamonov.social.cinema.dto.SessionOptions
 import ru.avtamonov.social.cinema.dto.SessionPlacesWithReserveStatus
 import ru.avtamonov.social.cinema.enum.Status
 import ru.avtamonov.social.cinema.exceptionhandling.customexceptions.ValidationException
+import ru.avtamonov.social.cinema.mapper.CinemaSessionMapper
 import ru.avtamonov.social.cinema.model.CinemaSession
 import ru.avtamonov.social.cinema.model.Place
 import java.time.LocalDateTime
+import java.util.*
 
 class SessionUtil {
     companion object {
@@ -16,14 +19,15 @@ class SessionUtil {
          * @param price - стандартная цена за билет
          * @param sessionOptions - конфигурация для сеансов
          * @throws ValidationException если категория в запросе не в диапазоне [0;3]
+         * @param isDiscountOn - конфигурация скидки, если включена, то расчёт по скидке, если выключена, то без неё по стандартной цене
          * @return цена билета
         * */
-        private fun calculateIncome(category: Int, price: Double, sessionOptions: SessionOptions): Double {
-            return when(category) {
-                0 -> price
-                1 -> price * (100 - sessionOptions.discount1) / 100
-                2 -> price * (100 - sessionOptions.discount2) / 100
-                3 -> price * (100 - sessionOptions.discount3) / 100
+        private fun calculateIncome(category: Int, price: Double, sessionOptions: SessionOptions, isDiscountOn: Boolean): Double {
+            return when {
+                category == 0 || !isDiscountOn -> price
+                category == 1 -> price * (100 - sessionOptions.discount1) / 100
+                category == 2 -> price * (100 - sessionOptions.discount2) / 100
+                category == 3 -> price * (100 - sessionOptions.discount3) / 100
                 else -> throw ValidationException("Не существует скидки для категории $category.")
             }
         }
@@ -32,8 +36,8 @@ class SessionUtil {
          * Валидация при бронировании, которая запрещает бронировать
          * стандартной категории до начала продаж для стандартной категории
          * */
-        fun validReserve(session: CinemaSession, category: Int, now: LocalDateTime) {
-            if (category == 0 && now.isBefore(session.startReserveForStandardCategory)) {
+        fun validReserve(session: CinemaSession, category: Int, now: LocalDateTime, discountMode: Boolean) {
+            if (category == 0 && now.isBefore(session.startReserveForStandardCategory) && discountMode) {
                 throw ValidationException("К сожалению, зарезервировать билеты для не социальной категории сейчас невозможно.")
             }
         }
@@ -45,6 +49,7 @@ class SessionUtil {
          * @param login - логин клиента (для сверки с логином, который забронировал эти места)
          * @param category - социальная категория
          * @param sessionOptions - конфигурация для сеансов
+         * @param isDiscountOn - конфигурация скидки
          * @return SessionPlacesWithReserveStatus - дто, в котором лежит статус бронирования,
          * свободные места на сеансе, занятые места на сеансе, расчёт прибыли
          * */
@@ -53,14 +58,15 @@ class SessionUtil {
             placesToReserve: List<Int>,
             login: String,
             category: Int,
-            sessionOptions: SessionOptions
+            sessionOptions: SessionOptions,
+            isDiscountOn: Boolean
         ): SessionPlacesWithReserveStatus {
             val newFreePlaces = session.freePlaces.toMutableList()
             val newReservedPlaces = session.reservedPlaces.toMutableMap()
             var totalIncome = session.totalIncome
             placesToReserve.forEach {
                 if (newFreePlaces.contains(it)) {
-                    val income = calculateIncome(category, session.standardPrice, sessionOptions)
+                    val income = calculateIncome(category, session.standardPrice, sessionOptions, isDiscountOn)
                     newReservedPlaces[it] = Place(login, income)
                     totalIncome += income
                 } else {

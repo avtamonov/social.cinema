@@ -15,23 +15,24 @@ import ru.avtamonov.social.cinema.service.CinemaSessionService
 import java.time.Clock
 import java.time.LocalDateTime
 import java.util.*
+import javax.annotation.PostConstruct
 
 /**
  * @param sessionOptions - конфигурация для сеансов
  * @param clock - системное время, позволяющее конфигурировать по часовым поясам
+ * @param cinemaSessions - Репозиторий сеансов решил реализовывать на Map<UUID, CinemaSession> в виду ограниченного времени, было бы больше времени, подключил H2.
 * */
 @Service
 class CinemaSessionServiceImpl (
     private val sessionOptions: SessionOptions,
-    private val clock: Clock
+    private val clock: Clock,
+    private val cinemaSessions: MutableMap<UUID, CinemaSession>
 ) : CinemaSessionService {
 
-    //TODO Модульное тестирование
     /**
-     * Репозиторий сеансов решил реализовывать на Map<UUID, CinemaSession> в виду ограниченного времени,
-     * было бы больше времени, подключил H2.
+     *  Флаг включенной скидки
      * */
-    private val cinemaSessions = mutableMapOf<UUID, CinemaSession>()
+    private var isDiscountOn = true
 
     private val logger = LoggerFactory.getLogger(this::class.java)
 
@@ -42,7 +43,7 @@ class CinemaSessionServiceImpl (
     }
 
     override fun getCinemaSessions(): List<CinemaSessionResponse> {
-        return cinemaSessions.map { CinemaSessionMapper.toResponse(it.value) }
+        return cinemaSessions.filter { it.value.startSessionDate.isAfter(LocalDateTime.now(clock)) }.map { CinemaSessionMapper.toResponse(it.value) }
     }
 
     override fun transferSessionTime(transferRequest: TransferRequest): Status {
@@ -65,8 +66,8 @@ class CinemaSessionServiceImpl (
     override fun reservePlacesOnSession(reserveRequest: ReserveRequest, login: String, category: Int): CinemaSessionResponse {
         val session = cinemaSessions[reserveRequest.idCinemaSession]
         return if (session != null) {
-            SessionUtil.validReserve(session, category, LocalDateTime.now(clock)) // Валидируем запрос на бронирование
-            val placesWithStatus = SessionUtil.reservePlaces(session, reserveRequest.places, login, category, sessionOptions) // Получаем расчёты по сеансу
+            SessionUtil.validReserve(session, category, LocalDateTime.now(clock), isDiscountOn) // Валидируем запрос на бронирование
+            val placesWithStatus = SessionUtil.reservePlaces(session, reserveRequest.places, login, category, sessionOptions, isDiscountOn) // Получаем расчёты по сеансу
             val updatedSession = session.copy(freePlaces = placesWithStatus.freePlaces, reservedPlaces = placesWithStatus.reservedPlaces, totalIncome = placesWithStatus.income) // обновляем сеанс и кладём в мапу
             cinemaSessions[session.id] = updatedSession
             CinemaSessionMapper.toResponse(updatedSession) // преобразуем ответ
@@ -113,5 +114,10 @@ class CinemaSessionServiceImpl (
             logger.info("Обновлено время начала продаж для несоциальной категории клиентов у сеанса id:${it.key}")
             cinemaSessions[it.key] = it.value // обновляем мапу со всеми сеансами
         }
+    }
+
+    override fun setDiscountMode(mode: Boolean): DiscountMode {
+        isDiscountOn = mode
+        return DiscountMode(isDiscountOn)
     }
 }

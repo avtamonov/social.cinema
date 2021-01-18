@@ -5,13 +5,13 @@ import java.util.*
 
 data class CinemaSessionResponse(
     val id: UUID,
-    val countOfPlaces: Int,
-    val filmName: String,
-    val freePlaces: List<Int>,
-    val reservedPlaces: List<ReservedPlaces>,
+    val countOfPlaces: Int = 0,
+    val filmName: String = "",
+    val freePlaces: List<Int> = listOf(),
+    val reservedPlaces: List<ReservedPlaces> = listOf(),
     val startSessionDate: LocalDateTime,
     val dateCreate: LocalDateTime,
-    val totalIncome: Double,
+    val totalIncome: Double = 0.0,
     val startReserveForStandardCategory: LocalDateTime
 )
 
