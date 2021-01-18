@@ -39,7 +39,7 @@ class SessionServiceImplTest {
 
     @Test
     fun `on getCinemaSessions should be ok`() {
-        val newSession = CinemaSessionCreateDto(countOfPlaces = 1, startSessionDate = LocalDateTime.now(clock))
+        val newSession = CinemaSessionCreateDto(countOfPlaces = 1, startSessionDate = LocalDateTime.now(clock).plusMinutes(50))
         sessionService.createCinemaSession(newSession)
         val result = sessionService.getCinemaSessions()
         result.size `should be` 1
