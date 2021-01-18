@@ -1,7 +1,9 @@
 package ru.avtamonov.social.cinema.service.impl
 
 import org.slf4j.LoggerFactory
+import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
+import ru.avtamonov.social.cinema.util.SessionUtil
 import ru.avtamonov.social.cinema.dto.*
 import ru.avtamonov.social.cinema.enum.Status
 import ru.avtamonov.social.cinema.exceptionhandling.customexceptions.ResourceNotFoundException
@@ -14,12 +16,21 @@ import java.time.Clock
 import java.time.LocalDateTime
 import java.util.*
 
+/**
+ * @param sessionOptions - конфигурация для сеансов
+ * @param clock - системное время, позволяющее конфигурировать по часовым поясам
+* */
 @Service
 class CinemaSessionServiceImpl (
     private val sessionOptions: SessionOptions,
     private val clock: Clock
 ) : CinemaSessionService {
 
+    //TODO Модульное тестирование
+    /**
+     * Репозиторий сеансов решил реализовывать на Map<UUID, CinemaSession> в виду ограниченного времени,
+     * было бы больше времени, подключил H2.
+     * */
     private val cinemaSessions = mutableMapOf<UUID, CinemaSession>()
 
     private val logger = LoggerFactory.getLogger(this::class.java)
@@ -37,10 +48,13 @@ class CinemaSessionServiceImpl (
     override fun transferSessionTime(transferRequest: TransferRequest): Status {
         val session = cinemaSessions[transferRequest.idCinemaSession]
         return if (session != null) {
-            cinemaSessions[session.id] = session.copy(startSessionDate = transferRequest.transferTime)
+            cinemaSessions[session.id] = session.copy(
+                startSessionDate = transferRequest.transferTime, // Переносим время начала сеанса
+                startReserveForStandardCategory = transferRequest.transferTime.minusMinutes(sessionOptions.delayTimeForStandardCategory), // Переносим начало продаж станд. категории
+                isStartReserveForStandardCategoryWasTransferred = false) // Меняем значение, чтобы шедулер заново расчитал, можно ли открывать продаже для станд. категории
             Status.OK
         } else {
-            Status.ERROR
+            throw ResourceNotFoundException("Сеанс с id:${transferRequest.idCinemaSession} не найден.")
         }
     }
 
@@ -51,109 +65,53 @@ class CinemaSessionServiceImpl (
     override fun reservePlacesOnSession(reserveRequest: ReserveRequest, login: String, category: Int): CinemaSessionResponse {
         val session = cinemaSessions[reserveRequest.idCinemaSession]
         return if (session != null) {
-            val placesWithStatus = reservePlaces(session, reserveRequest.places, login, category)
-            if (placesWithStatus.status != Status.ERROR) {
-                val updatedSession = session.copy(freePlaces = placesWithStatus.freePlaces, reservedPlaces = placesWithStatus.reservedPlaces, totalIncome = placesWithStatus.income)
-                cinemaSessions[session.id] = updatedSession
-                logger.info("Успешная бронь")
-                CinemaSessionMapper.toResponse(updatedSession)
-            } else {
-                logger.error("Вы пытались забронировать уже занятые места")
-                throw ValidationException("Вы пытались забронировать уже занятые места")
-            }
+            SessionUtil.validReserve(session, category, LocalDateTime.now(clock)) // Валидируем запрос на бронирование
+            val placesWithStatus = SessionUtil.reservePlaces(session, reserveRequest.places, login, category, sessionOptions) // Получаем расчёты по сеансу
+            val updatedSession = session.copy(freePlaces = placesWithStatus.freePlaces, reservedPlaces = placesWithStatus.reservedPlaces, totalIncome = placesWithStatus.income) // обновляем сеанс и кладём в мапу
+            cinemaSessions[session.id] = updatedSession
+            CinemaSessionMapper.toResponse(updatedSession) // преобразуем ответ
         } else {
-            throw ResourceNotFoundException("Сеанс с id:${reserveRequest.idCinemaSession} не найден")
+            throw ResourceNotFoundException("Сеанс с id:${reserveRequest.idCinemaSession} не найден.")
         }
     }
 
     override fun unReservePlacesOnSession(unReserveRequest: ReserveRequest, login: String): CinemaSessionResponse {
         val session = cinemaSessions[unReserveRequest.idCinemaSession]
         return if (session != null) {
-            val placesWithStatus = unReservePlaces(session, unReserveRequest.places, login)
+            val placesWithStatus = SessionUtil.unReservePlaces(session, unReserveRequest.places, login) //Расчёты по сеансу
             if (placesWithStatus.status != Status.ERROR) {
-                val updatedSession = session.copy(freePlaces = placesWithStatus.freePlaces, reservedPlaces = placesWithStatus.reservedPlaces, totalIncome = placesWithStatus.income)
+                val updatedSession = session.copy(freePlaces = placesWithStatus.freePlaces, reservedPlaces = placesWithStatus.reservedPlaces, totalIncome = placesWithStatus.income) // обновляем сеанс и кладём в мапу
                 cinemaSessions[session.id] = updatedSession
                 CinemaSessionMapper.toResponse(updatedSession)
             } else {
-                throw ValidationException("Вы пытались отменить чужую бронь или свободные места")
+                throw ValidationException("Вы пытались отменить чужую бронь или свободные места.")
             }
         } else {
-            throw ResourceNotFoundException("Сеанс с id:${unReserveRequest.idCinemaSession} не найден")
+            throw ResourceNotFoundException("Сеанс с id:${unReserveRequest.idCinemaSession} не найден.")
         }
     }
 
-    //FIXME Проблемы с оптимизацией
     override fun getSessionHistoryByLogin(login: String): List<SessionHistoryResponse> {
+        val now = LocalDateTime.now(clock)
         return cinemaSessions
-            .filterValues { it.reservedPlaces.filterValues { v -> v.login == login }.isNotEmpty() }.values.toList()
-            .map { CinemaSessionMapper.toHistoryResponse(it) }
+            .filterValues { it.reservedPlaces.filterValues { v -> v.login == login }.isNotEmpty() && it.startSessionDate.isBefore(now) }.values.toList() // фильтруем по логину и дате начала сеанса (чтобы она была не больше текущей) и приводим к списку
+            .map { CinemaSessionMapper.toHistoryResponse(it) } // мапим ответ
     }
 
-    private fun reservePlaces(
-        session: CinemaSession,
-        placesToReserve: List<Int>,
-        login: String,
-        category: Int
-    ): SessionPlacesWithReserveStatus {
-        val newFreePlaces = session.freePlaces.toMutableList()
-        val newReservedPlaces = session.reservedPlaces.toMutableMap()
-        var isReserveSuccess = true
-        var totalIncome = session.totalIncome
-        placesToReserve.forEach {
-            if (newFreePlaces.contains(it)) {
-                val income = calculateIncome(category, session.standardPrice)
-                newReservedPlaces[it] = Place(login, income)
-                totalIncome += income
-            } else {
-                isReserveSuccess = false
-            }
+    @Scheduled(fixedRate = 5000)
+    override fun checkTimeForStandardCategory() {
+        val sessionsToUpdate = mutableMapOf<UUID, CinemaSession>() // мапа сеансов, которые нужно обновить в мапе всех сеансов
+        val now = LocalDateTime.now(clock)
+        cinemaSessions
+            .filter { !it.value.isStartReserveForStandardCategoryWasTransferred } // отфильтровываем сеансы, по которым не началась продажа станд. категории
+            .forEach {
+                if (SessionUtil.needToOpenStandardCategoryReserve(it.value, sessionOptions, now)) { // проверка необходимости начала продаж для станд. категории
+                    sessionsToUpdate[it.key] = it.value.copy(startReserveForStandardCategory = now, isStartReserveForStandardCategoryWasTransferred = true) // обновляем время начала продажи для стнд категории
+                }
         }
-        return if (isReserveSuccess) {
-            newFreePlaces.removeIf { it in placesToReserve }
-            newFreePlaces.sort()
-            newReservedPlaces.toSortedMap()
-            SessionPlacesWithReserveStatus(newFreePlaces, newReservedPlaces, Status.OK, totalIncome)
-        } else {
-            SessionPlacesWithReserveStatus(session.freePlaces, session.reservedPlaces, Status.ERROR, session.totalIncome)
+        sessionsToUpdate.forEach {
+            logger.info("Обновлено время начала продаж для несоциальной категории клиентов у сеанса id:${it.key}")
+            cinemaSessions[it.key] = it.value // обновляем мапу со всеми сеансами
         }
     }
-
-    private fun unReservePlaces(
-        session: CinemaSession,
-        placesToUnReserve: List<Int>,
-        login: String
-    ): SessionPlacesWithReserveStatus {
-        val newFreePlaces = session.freePlaces.toMutableList()
-        val newReservedPlaces = session.reservedPlaces.toMutableMap()
-        var isUnReserveSuccess = true
-        var totalIncome = session.totalIncome
-        placesToUnReserve.forEach {
-            val reservedPlaceInfo = newReservedPlaces[it]
-            if (reservedPlaceInfo != null && reservedPlaceInfo.login == login) {
-                newFreePlaces.add(it)
-                newReservedPlaces.remove(it)
-                totalIncome -= reservedPlaceInfo.price
-            } else {
-                isUnReserveSuccess = false
-            }
-        }
-        return if (isUnReserveSuccess) {
-            newFreePlaces.sort()
-            newReservedPlaces.toSortedMap()
-            SessionPlacesWithReserveStatus(newFreePlaces, newReservedPlaces, Status.OK, totalIncome)
-        } else {
-            SessionPlacesWithReserveStatus(session.freePlaces, session.reservedPlaces, Status.ERROR, session.totalIncome)
-        }
-    }
-
-    private fun calculateIncome(category: Int, price: Double): Double {
-        return when(category) {
-            0 -> price
-            1 -> price * (100 - sessionOptions.discount1) / 100
-            2 -> price * (100 - sessionOptions.discount2) / 100
-            3 -> price * (100 - sessionOptions.discount3) / 100
-            else -> throw ValidationException("Не существует скидки для категории $category")
-        }
-    }
-
 }

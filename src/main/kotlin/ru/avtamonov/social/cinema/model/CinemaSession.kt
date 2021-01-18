@@ -13,7 +13,8 @@ data class CinemaSession(
     val totalIncome: Double,
     val standardPrice: Double,
     val dateCreate: LocalDateTime,
-    val startReserveForStandardCategory: LocalDateTime
+    val startReserveForStandardCategory: LocalDateTime,
+    val isStartReserveForStandardCategoryWasTransferred: Boolean = false
 )
 
 data class Place (

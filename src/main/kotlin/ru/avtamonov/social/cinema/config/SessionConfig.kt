@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import ru.avtamonov.social.cinema.dto.SessionOptions
 import ru.avtamonov.social.cinema.exceptionhandling.customexceptions.ValidationException
+import kotlin.math.min
 
 @Configuration
 class SessionConfig {
@@ -21,6 +22,12 @@ class SessionConfig {
     @Value("\${delay-time-for-standard-category}")
     private var delayTimeForStandardCategory = 0L
 
+    @Value("\${minProfit}")
+    private var minProfit = 0
+
+    @Value("\${payback-time}")
+    private var paybackTime = 0L
+
     @Bean
     fun sessionOptions(): SessionOptions {
         validateDiscounts()
@@ -28,7 +35,9 @@ class SessionConfig {
             discount1 = discount1,
             discount2 = discount2,
             discount3 = discount3,
-            delayTimeForStandardCategory = delayTimeForStandardCategory
+            delayTimeForStandardCategory = delayTimeForStandardCategory,
+            minProfit = minProfit,
+            paybackTime = paybackTime
         )
     }
 
@@ -37,6 +46,7 @@ class SessionConfig {
             discount1 > 100 || discount1 < 0 -> throw ValidationException("Скидка для категории 1 меньше 0 или больше 100")
             discount2 > 100 || discount2 < 0 -> throw ValidationException("Скидка для категории 2 меньше 0 или больше 100")
             discount3 > 100 || discount3 < 0 -> throw ValidationException("Скидка для категории 3 меньше 0 или больше 100")
+            minProfit > 100 || minProfit < 0 -> throw ValidationException("Процент минимального дохода с сеанса меньше 0 или больше 100")
         }
     }
 
