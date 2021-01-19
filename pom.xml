@@ -17,8 +17,11 @@
 	<description>Система бронирования билетов в социальном кинотеатре</description>
 
 	<properties>
+		<kotlin.compiler.incremental>false</kotlin.compiler.incremental>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 		<java.version>1.8</java.version>
-		<kotlin.version>1.4.21</kotlin.version>
+		<kotlin.version>1.3.60</kotlin.version>
 	</properties>
 
 	<dependencies>
@@ -65,14 +68,14 @@
 			<version>1.5.21</version>
 		</dependency>
 		<dependency>
-			<groupId>io.springfox</groupId>
-			<artifactId>springfox-swagger-ui</artifactId>
-			<version>2.9.0</version>
+			<groupId>org.webjars</groupId>
+			<artifactId>swagger-ui</artifactId>
+			<version>3.40.0</version>
 		</dependency>
         <dependency>
             <groupId>io.mockk</groupId>
             <artifactId>mockk</artifactId>
-            <version>1.9.1</version>
+            <version>1.10.0</version>
             <scope>test</scope>
         </dependency>
 
@@ -86,15 +89,37 @@
 
 	<build>
 		<sourceDirectory>${project.basedir}/src/main/kotlin</sourceDirectory>
+		<!--
 		<testSourceDirectory>${project.basedir}/src/test/kotlin</testSourceDirectory>
+		<testResources>
+			<testResource>
+				<directory>${basedir}/src/test/resources</directory>
+			</testResource>
+		</testResources>-->
 		<plugins>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+				<configuration>
+					<executable>true</executable>
+				</configuration>
+				<executions>
+					<execution>
+						<goals>
+							<goal>repackage</goal>
+							<goal>build-info</goal>
+						</goals>
+						<configuration>
+							<additionalProperties>
+								<java.version>${java.version}</java.version>
+							</additionalProperties>
+						</configuration>
+					</execution>
+				</executions>
 			</plugin>
 			<plugin>
-				<groupId>org.jetbrains.kotlin</groupId>
 				<artifactId>kotlin-maven-plugin</artifactId>
+				<groupId>org.jetbrains.kotlin</groupId>
 				<configuration>
 					<args>
 						<arg>-Xjsr305=strict</arg>
@@ -109,7 +134,20 @@
 						<artifactId>kotlin-maven-allopen</artifactId>
 						<version>${kotlin.version}</version>
 					</dependency>
+					<dependency>
+						<groupId>org.jetbrains.kotlin</groupId>
+						<artifactId>kotlin-maven-noarg</artifactId>
+						<version>${kotlin.version}</version>
+					</dependency>
 				</dependencies>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>2.22.1</version>
+				<configuration>
+					<skipTests>false</skipTests>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>

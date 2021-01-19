@@ -2,7 +2,6 @@ package ru.avtamonov.social.cinema.service
 
 import io.mockk.spyk
 import org.amshove.kluent.`should be`
-import org.amshove.kluent.`should not be`
 import org.assertj.core.api.Assertions
 import org.junit.Test
 import ru.avtamonov.social.cinema.dto.CinemaSessionCreateDto
