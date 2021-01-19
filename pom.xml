@@ -68,9 +68,9 @@
 			<version>1.5.21</version>
 		</dependency>
 		<dependency>
-			<groupId>org.webjars</groupId>
-			<artifactId>swagger-ui</artifactId>
-			<version>3.40.0</version>
+			<groupId>io.springfox</groupId>
+			<artifactId>springfox-swagger-ui</artifactId>
+			<version>2.9.0</version>
 		</dependency>
         <dependency>
             <groupId>io.mockk</groupId>
@@ -87,15 +87,16 @@
 		</dependency>
     </dependencies>
 
+	<repositories>
+		<repository>
+			<id>jcenter</id>
+			<name>jcenter</name>
+			<url>https://jcenter.bintray.com/</url>
+		</repository>
+	</repositories>
+
 	<build>
 		<sourceDirectory>${project.basedir}/src/main/kotlin</sourceDirectory>
-		<!--
-		<testSourceDirectory>${project.basedir}/src/test/kotlin</testSourceDirectory>
-		<testResources>
-			<testResource>
-				<directory>${basedir}/src/test/resources</directory>
-			</testResource>
-		</testResources>-->
 		<plugins>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
